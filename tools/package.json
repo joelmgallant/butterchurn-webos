@@ -1,0 +1,8 @@
+{
+  "name": "butterchurn-tv-tools",
+  "private": true,
+  "description": "LG's ares-package, used by build-app.py",
+  "dependencies": {
+    "@webos-tools/cli": "3.2.1"
+  }
+}

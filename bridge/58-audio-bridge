@@ -1,0 +1,7 @@
+#!/bin/sh
+# Homebrew Channel boot hook (run-parts): start the butterchurn audio bridge
+# detached. The bridge checks its pidfile, so running this twice starts only one.
+# Undo: rm this file, then kill "$(cat /tmp/audio-bridge.pid)"
+[ -x /usr/bin/node ] || exit 0
+export PATH="/bin:/sbin:/usr/bin:/usr/sbin:$PATH"
+setsid nohup /usr/bin/node /var/lib/audio-bridge/audio-bridge.js >/dev/null 2>&1 </dev/null &
