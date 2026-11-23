@@ -16,8 +16,10 @@ rooted LG G2 (webOS 7.3.1), drawn over an HDMI input and reacting to its audio.
   stays in front and keeps playing. Any key closes it. The launch param
   `{"width": N}` sets the render width (1280 by default).
 
-Key 3 on the remote launches it, through the key watcher in
-`../key-screensaver`.
+Launch it with `luna-send -n 1 luna://com.webos.applicationManager/launch
+'{"id":"org.joelmgallant.butterchurn"}'` (stdin held open, as luna-send needs on
+webOS 7). On the author's TV a small evdev watcher does that on the remote's 3
+key.
 
 It is an app rather than a Glasshouse screen saver: webOS 7's app manager
 cannot switch the screen saver app between QML and web without a restart, so
@@ -27,7 +29,7 @@ a web screen saver cannot sit beside QML ones on this TV.
 
     (cd tools && npm ci)        # LG's ares-package, once
     ./build-app.py              # dist/org.joelmgallant.butterchurn_<version>_all.ipk
-    ./deploy.sh [address]       # build, install app + bridge, restart the bridge
+    ./deploy.sh <tv-address>    # build, install app + bridge, restart the bridge (SSH_KEY=... optional)
 
 ## Test
 
