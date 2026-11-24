@@ -11,10 +11,19 @@ rooted LG G2 (webOS 7.3.1), drawn over an HDMI input and reacting to its audio.
 - `web/` is the page: `pcm-levels.js` turns the PCM into butterchurn's
   `render({audioLevels})` input with automatic gain, and `app.js` cycles a random
   preset from the base pack every 30 s.
+- `preset-guard.js` measures each preset's frame rate on the TV (after the
+  blend settles) and blocks the ones below 40 fps: the app skips ahead at once
+  and leaves them out of later rotations. The list is kept in the app's
+  localStorage and reported as `slowPresets` (with recent `verdicts`) in
+  `/status`. At most half the pack is ever blocked.
 - `build-app.py` packages `web/` as the app `org.joelmgallant.butterchurn`
   with `defaultWindowType: overlay`, so it draws over the input while the input
-  stays in front and keeps playing. Any key closes it. The launch param
-  `{"width": N}` sets the render width (1280 by default).
+  stays in front and keeps playing. Any key closes it. Launch params:
+  `{"width": N}` sets the render width (1280 by default); `{"mesh": N}` the
+  warp mesh width (32, so 32x24; butterchurn's own default is 48x36, and the
+  per-vertex equations run in JS once per mesh point per frame);
+  `{"minFps": N}` the slow-preset threshold (40); `{"resetSlow": true}`
+  forgets the blocked list.
 
 Launch it with `luna-send -n 1 luna://com.webos.applicationManager/launch
 '{"id":"org.joelmgallant.butterchurn"}'` (stdin held open, as luna-send needs on
@@ -34,6 +43,7 @@ a web screen saver cannot sit beside QML ones on this TV.
 ## Test
 
     node test/test-pcm-levels.js
+    node test/test-preset-guard.js
     node test/test-audio-bridge.js
     node test/local-smoke.js    # then open http://127.0.0.1:8098/ (after build-app.py)
 

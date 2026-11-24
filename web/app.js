@@ -10,6 +10,14 @@
   try { launchParams = JSON.parse((window.PalmSystem && window.PalmSystem.launchParams) || '{}') || {}; } catch (err) { /* no params */ }
   var RENDER_WIDTH = Math.max(320, Math.min(1920, parseInt(launchParams.width, 10) || 1280));
   var RENDER_HEIGHT = Math.round(RENDER_WIDTH * 9 / 16);
+  // Per-vertex equations run in JS on the TV's CPU once per mesh point per
+  // frame; butterchurn's default 48x36 mesh is 1728 points, 32x24 is 768.
+  var MESH_WIDTH = Math.max(8, Math.min(64, parseInt(launchParams.mesh, 10) || 32));
+  var MESH_HEIGHT = Math.round(MESH_WIDTH * 3 / 4);
+  // Presets measured below this frame rate are skipped from then on
+  // (preset-guard.js); {"resetSlow":true} forgets the list.
+  var MIN_FPS = Math.max(1, parseInt(launchParams.minFps, 10) || 40);
+  var SLOW_STORAGE_KEY = 'butterchurn.slowPresets';
   var PRESET_SECONDS = 30;
   var BLEND_SECONDS = 2.7;
   var STATUS_SECONDS = 10;
@@ -59,6 +67,20 @@
     });
   }
 
+  function loadSlowList() {
+    try {
+      if (launchParams.resetSlow) window.localStorage.removeItem(SLOW_STORAGE_KEY);
+      var stored = JSON.parse(window.localStorage.getItem(SLOW_STORAGE_KEY) || '[]');
+      return Array.isArray(stored) ? stored : [];
+    } catch (err) {
+      return [];
+    }
+  }
+
+  function saveSlowList(names) {
+    try { window.localStorage.setItem(SLOW_STORAGE_KEY, JSON.stringify(names)); } catch (err) { /* not persisted */ }
+  }
+
   function shuffled(list) {
     var copy = list.slice();
     for (var i = copy.length - 1; i > 0; i--) {
@@ -87,28 +109,55 @@
       width: RENDER_WIDTH,
       height: RENDER_HEIGHT,
       pixelRatio: 1,
-      textureRatio: 1
+      textureRatio: 1,
+      meshWidth: MESH_WIDTH,
+      meshHeight: MESH_HEIGHT
     });
 
     var presets = presetApi.getPresets();
+    var presetNames = Object.keys(presets);
+    var guard = PresetGuard.create({
+      minFps: MIN_FPS,
+      settleSeconds: BLEND_SECONDS + 1.5,
+      sampleSeconds: 5,
+      presetCount: presetNames.length,
+      blocked: loadSlowList()
+    });
+    report.verdicts = [];
+
     var queue = [];
+    var rotationTimer = null;
     function nextPreset(blendSeconds) {
-      if (!queue.length) queue = shuffled(Object.keys(presets));
+      if (!queue.length) {
+        queue = shuffled(presetNames.filter(function (presetName) { return !guard.isBlocked(presetName); }));
+      }
       var name = queue.shift();
       try {
         visualizer.loadPreset(presets[name], blendSeconds);
         report.preset = name;
+        guard.begin(name, performance.now());
       } catch (err) {
         noteError('preset ' + name + ': ' + err.message);
       }
+      clearTimeout(rotationTimer);
+      rotationTimer = setTimeout(function () { nextPreset(BLEND_SECONDS); }, PRESET_SECONDS * 1000);
     }
     nextPreset(0);
-    setInterval(function () { nextPreset(BLEND_SECONDS); }, PRESET_SECONDS * 1000);
+
+    function handleVerdict(verdict) {
+      report.verdicts.push(verdict);
+      if (report.verdicts.length > 8) report.verdicts.shift();
+      if (!verdict.blocked) return;
+      saveSlowList(guard.blockedNames());
+      nextPreset(BLEND_SECONDS);
+    }
 
     var frames = 0;
-    function frame() {
+    function frame(timestamp) {
       visualizer.render({ audioLevels: levels.read() });
       frames++;
+      var verdict = guard.frame(timestamp);
+      if (verdict) handleVerdict(verdict);
       requestAnimationFrame(frame);
     }
     requestAnimationFrame(frame);
@@ -119,8 +168,11 @@
         fps: Math.round(frames / STATUS_SECONDS),
         bytesPerSecond: Math.round((report.bytes - lastBytes) / STATUS_SECONDS),
         peak: Math.round(levels.peak()),
-        presetCount: Object.keys(presets).length,
-        renderWidth: RENDER_WIDTH
+        presetCount: presetNames.length,
+        renderWidth: RENDER_WIDTH,
+        mesh: MESH_WIDTH + 'x' + MESH_HEIGHT,
+        minFps: MIN_FPS,
+        slowPresets: guard.blockedNames()
       });
       frames = 0;
       lastBytes = report.bytes;

@@ -22,7 +22,7 @@ ARES_PACKAGE = os.path.join(HERE, 'tools', 'node_modules', '.bin', 'ares-package
 
 APP_INFO = {
     'id': 'org.joelmgallant.butterchurn',
-    'version': '0.1.1',
+    'version': '0.1.2',
     'vendor': 'Joel Gallant',
     'type': 'web',
     'main': 'index.html',
